@@ -1,18 +1,19 @@
 package org.example;
 
+import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class User {
-    private String name;
+    private String login;
     private String password;
 
-    public String getName() {
-        return name;
+    public String getLogin() {
+        return login;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setLogin(String login) {
+        this.login = login;
     }
 
     public String getPassword() {
@@ -27,8 +28,8 @@ public class User {
 
     Scanner scanner = new Scanner(System.in);
 
-    public User(String name, String password) {
-        this.name = name;
+    public User(String login, String password) {
+        this.login = login;
         this.password = password;
     }
 
@@ -50,10 +51,6 @@ public class User {
         int category = scanner.nextInt();
         local = scanner.nextLine();
         tasks.add(new Task(name, Task.setImportant(important), date, content, Task.setCategory(category)));
-    }
-
-    public void readTask(String name, String importance, String date, String content, String category, String completed) {
-        tasks.add(new Task(name, importance, date, content, category, completed));
     }
 
     public void deleteTask(String taskName) {
@@ -100,35 +97,42 @@ public class User {
         }
     }
 
-    public String writeTask() {
-        String s = "";
-        for (Task t : tasks) {
-            s += t.getName() + ":" + t.getImportance().toString() + ":" + t.getDateString() + ":" + t.getContent() + ":" + t.getCategory().toString() + ":" + t.isCompleted() + "\n";
+    public void writeBinTask(String fileName) {
+        try (
+                OutputStream out = new FileOutputStream(fileName);
+                DataOutputStream dataOut = new DataOutputStream(out)
+        ) {
+            for (Task t : tasks) {
+                dataOut.writeUTF(t.getName());
+                dataOut.writeUTF(t.getImportance().toString());
+                dataOut.writeUTF(t.getDateString());
+                dataOut.writeUTF(t.getContent());
+                dataOut.writeUTF(t.getCategory().toString());
+                dataOut.writeUTF(String.valueOf(t.isCompleted()));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        return s;
+    }
+
+    public void readBinTask(String fileName) {
+        try (
+                InputStream in = new FileInputStream(fileName);
+                DataInputStream dataIn = new DataInputStream(in)
+        ) {
+            while (dataIn.available() > 0) {
+                tasks.add(new Task(dataIn.readUTF(), dataIn.readUTF(), dataIn.readUTF(), dataIn.readUTF(), dataIn.readUTF(), dataIn.readUTF()));
+
+            }
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public String toString() {
-        return name + ":" + password;
+        return login + ":" + password;
     }
-}
-
-class MakeUsers {
-    static Set<User> users = new HashSet<>();
-    static Scanner scanner = new Scanner(System.in);
-
-    public static void addUser() {
-        System.out.println("Enter login: ");
-        String login = scanner.nextLine();
-        System.out.println("Enter password: ");
-        String password = scanner.nextLine();
-        users.add(new User(login, password));
-    }
-
-    public static void showUsers() {
-        for (User u : users)
-            System.out.println(u.toString());
-    }
-
 }

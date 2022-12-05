@@ -1,8 +1,6 @@
 package org.example;
 
 import java.io.*;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -14,28 +12,26 @@ public class App {
 
         Map<String, Command> cmd = new HashMap<>();
         Map<String, User> userMap = new HashMap<>();
+
+        List<User> users = new ArrayList<>();
+
         final String[] login = new String[1];
         final String[] password = new String[1];
 
+
         //Зчитування з файлу даних про користувачів та заповнення userMap
-        try (
-                InputStream in = new FileInputStream("users.txt");
-        ) {
-            int size = in.available();
-            byte[] buffer = new byte[size];
-            int count = in.read(buffer);
-            if (count == size && count != 0) {
-                String users = new String(buffer, 1, count - 2);
-                String[] u = users.split(",\s");
-                for (String s : u) {
-                    String[] user = new String[2];
-                    user = s.split(":");
-                    userMap.put(user[0], new User(user[0], user[1]));
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+       try(
+               InputStream in = new FileInputStream("users.bin");
+               DataInputStream dataIn = new DataInputStream(in)
+       ){
+           while (dataIn.available() > 0){
+               users.add(new User(dataIn.readUTF(), dataIn.readUTF()));
+           }
+       } catch (FileNotFoundException e) {
+           throw new RuntimeException(e);
+       } catch (IOException e) {
+           throw new RuntimeException(e);
+       }
 
         //Команда реєстрації
         Command cmd1 = new Command() {
@@ -45,11 +41,11 @@ public class App {
                 login[0] = scanner.next();
                 System.out.println("Enter password:");
                 password[0] = scanner.next();
-                if (!userMap.containsKey(login[0])) {
-                    userMap.put(login[0], new User(login[0], password[0]));
+                if (users.stream().noneMatch(u -> u.getLogin().equals(login[0]))) {
+                    users.add(new User(login[0], password[0]));
                     System.out.println("Account is added");
                     try {
-                        Files.createFile(Path.of(login[0] + ".txt"));
+                        Files.createFile(Path.of(login[0] + ".bin"));
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -68,32 +64,13 @@ public class App {
                 System.out.println("Enter password:");
                 password[0] = scanner.next();
                 Boolean exit = true;
-                if (!userMap.containsKey(login[0])) {
+                if (users.stream().noneMatch(u -> u.getLogin().equals(login[0]))) {
                     System.err.println("User with login " + login[0] + " is absent");
-                } else if (userMap.get(login[0]).getPassword().equals(password[0])) {
+                } else if (users.stream().anyMatch(u -> u.getLogin().equals(login[0]) && u.getPassword().equals(password[0]))) {
 
                     //Зчитування тасків користувача із файла
-                    String fileName = login[0] + ".txt";
-                    try (
-                            InputStream in = new FileInputStream(fileName);
-                    ) {
-                        int size = in.available();
-                        byte[] buffer = new byte[size];
-                        int count = in.read(buffer);
-                        if (count == size && count != 0) {
-                            String tasks = new String(buffer, 0, count - 2);
-                            String[] u = tasks.split("\n");
-                            for (String s : u) {
-                                String[] user = new String[6];
-                                user = s.split(":");
-                                userMap.get(login[0]).readTask(user[0], user[1], user[2], user[3], user[4], user[5]);
-                            }
-                        }
-                    } catch (FileNotFoundException e) {
-                        throw new RuntimeException(e);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
+                    String fileName = login[0] + ".bin";
+                    users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().readBinTask(fileName);
 
                     while (exit) {
                         System.out.println("Select function: \n" +
@@ -106,19 +83,7 @@ public class App {
                         String choose = scanner.next();
                         if (choose.equals("f")) {
                             exit = false;
-
-                            //String fileName = login[0] + ".txt";
-                            try (
-                                    OutputStream out = new FileOutputStream(fileName);
-                            ) {
-                                //out.write((login[0] + "^" + password[0] + "\n").getBytes());
-                                out.write((userMap.get(login[0]).writeTask()).getBytes());
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-
-                        } else if (cmd.get(choose) == null) {
-                            continue;
+                            users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().writeBinTask(fileName);
                         } else {
                             cmd.get(choose).command();
                         }
@@ -133,7 +98,7 @@ public class App {
         Command cmd3 = new Command() {
             @Override
             void command() {
-                System.out.println(userMap);
+                System.out.println(users);
             }
         };
 
@@ -141,7 +106,7 @@ public class App {
         Command cmd4 = new Command() {
             @Override
             void command() {
-                userMap.get(login[0]).addTask();
+                users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().addTask();
             }
         };
 
@@ -151,7 +116,7 @@ public class App {
             void command() {
                 System.out.println("Enter the name of the task you want to mark as completed ");
                 String name = scanner.next();
-                userMap.get(login[0]).taskCompleted(name);
+                users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().taskCompleted(name);
             }
         };
 
@@ -161,7 +126,7 @@ public class App {
             void command() {
                 System.out.println("Enter the name of the task to be deleted: ");
                 String name = scanner.next();
-                userMap.get(login[0]).deleteTask(name);
+                users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().deleteTask(name);
             }
         };
 
@@ -169,7 +134,7 @@ public class App {
         Command cmd7 = new Command() {
             @Override
             void command() {
-                userMap.get(login[0]).sortTasksByImportanceDate();
+                users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().sortTasksByImportanceDate();
             }
         };
 
@@ -177,7 +142,7 @@ public class App {
         Command cmd8 = new Command() {
             @Override
             void command() {
-                userMap.get(login[0]).sortCompletedTasksByData();
+                users.stream().filter(u -> u.getLogin().equals(login[0])).findAny().get().sortCompletedTasksByData();
             }
         };
 
@@ -197,9 +162,13 @@ public class App {
             if (choose.equals("3")) {
 
                 try (
-                        OutputStream out = new FileOutputStream("users.txt");
+                        OutputStream out = new FileOutputStream("users.bin");
+                        DataOutputStream dataOut = new DataOutputStream(out)
                 ) {
-                    out.write(userMap.values().toString().getBytes());
+                    for (User u : users){
+                        dataOut.writeUTF(u.getLogin());
+                        dataOut.writeUTF(u.getPassword());
+                    }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
